@@ -170,7 +170,30 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin,
             message = template.format(type(ex).__name__, ex.args)
             self._logger.warn(message)
             pass
+#Taken from LEDStripControl; attempting to control neopixel with M150 commands
+#https://github.com/google/OctoPrint-LEDStripControl
+     def HandleM150(self, ledPin, phase, cmd, cmd_type, gcode, *args, **kwargs):
+		if gcode and cmd.startswith("M150"):
+			self._logger.debug(u"M150 Detected: %s" % (cmd,))
+			# Emulating Marlin 1.1.0's syntax
+			# https://github.com/MarlinFirmware/Marlin/blob/RC/Marlin/Marlin_main.cpp#L6133
+			dutycycles = {'r':0.0, 'g':0.0, 'b':0.0}
+			for match in re.finditer(r'([RGUBrgub]) *(\d*)', cmd):
+				k = match.group(1).lower()
+				# Marlin uses RUB instead of RGB
+				if k == 'u': k = 'g'
+				try:
+					v = float(match.group(2))
+				except ValueError:
+					# more than likely match.group(2) was unspecified
+					v = 255.0
+				v = v/255.0 * 100.0 # convert RGB to RPi dutycycle
+				v = max(min(v, 100.0), 0.0) # clamp the value
+				dutycycles[k] = v
+				self._logger.debug(u"match 1: %s 2: %s" % (k, v))
 
+			for l in dutycycles.keys():
+				self._leds[l].ChangeDutyCycle(dutycycles[l])
     def checkEnclosureTemp(self):
         try:
             for temp_reader in self.temperature_reading:
